@@ -1,13 +1,28 @@
 package com.trading.tradeapigateway.filter;
 
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Component
 public class AuthenticationFilter extends AbstractGatewayFilterFactory<AuthenticationFilter.Config> {
 
+    @Autowired
+    private RouteValidator routeValidator;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -18,32 +33,61 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
     @Override
     public GatewayFilter apply(Config config) {
-        return ((exchange, chain) -> {
-            if (validator.isSecured.test(exchange.getRequest())) {
-                //header contains token or not
-                if (!exchange.getRequest().getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
-                    throw new RuntimeException("missing authorization header");
+        return (exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+
+            if (routeValidator.isSecured.test(request)) {
+                // Check if Authorization header is present
+                if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                    return onError(exchange, "Missing Authorization Header", HttpStatus.UNAUTHORIZED);
                 }
 
-                String authHeader = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION).get(0);
-                if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                    authHeader = authHeader.substring(7);
+                String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    return onError(exchange, "Invalid Authorization Header format. Expected 'Bearer <token>'", HttpStatus.UNAUTHORIZED);
                 }
+
+                String token = authHeader.substring(7).trim();
+
                 try {
-//                    //REST call to AUTH service
-//                    template.getForObject("http://IDENTITY-SERVICE//validate?token" + authHeader, String.class);
-                    jwtUtil.validateToken(authHeader);
+                    // Validate token signature and expiration
+                    jwtUtil.validateToken(token);
 
-                } catch (Exception e) {
-                    System.out.println("invalid access...!");
-                    throw new RuntimeException("un authorized access to application");
+                    // Extract user claims to propagate downstream
+                    String username = jwtUtil.extractUsername(token);
+                    List<String> roles = jwtUtil.extractRoles(token);
+
+                    ServerHttpRequest.Builder requestBuilder = request.mutate();
+                    if (username != null) {
+                        requestBuilder.header("X-Auth-Username", username);
+                    }
+                    if (roles != null && !roles.isEmpty()) {
+                        requestBuilder.header("X-Auth-Roles", String.join(",", roles));
+                    }
+
+                    return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
+
+                } catch (ExpiredJwtException e) {
+                    return onError(exchange, "JWT token has expired", HttpStatus.UNAUTHORIZED);
+                } catch (JwtException | IllegalArgumentException e) {
+                    return onError(exchange, "Invalid JWT token: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
                 }
             }
+
             return chain.filter(exchange);
-        });
+        };
+    }
+
+    private Mono<Void> onError(ServerWebExchange exchange, String errorMessage, HttpStatus httpStatus) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(httpStatus);
+        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        String body = String.format("{\"error\": \"%s\", \"status\": %d}", errorMessage, httpStatus.value());
+        DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
+        return response.writeWith(Mono.just(buffer));
     }
 
     public static class Config {
-
     }
 }

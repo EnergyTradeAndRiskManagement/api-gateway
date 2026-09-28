@@ -12,7 +12,14 @@ spring:
 
   cloud:
     gateway:
+      default-filters:
+        - AuthenticationFilter
       routes:
+
+        - id: auth-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/auth/**
 
         - id: trade-service
           uri: http://localhost:8081
@@ -29,8 +36,5 @@ spring:
           predicates:
             - Path=/api/risk/**
 
-
-
 jwt:
   secret: mySuperSecretFallbackKeyThatIsLongEnoughToPreventErrors123456!
-
