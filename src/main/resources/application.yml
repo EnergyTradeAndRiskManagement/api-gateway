@@ -1,0 +1,36 @@
+server:
+  port: 8080
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+spring:
+  application:
+    name: TradeApiGateway
+
+  cloud:
+    gateway:
+      routes:
+
+        - id: trade-service
+          uri: http://localhost:8081
+          predicates:
+            - Path=/api/v1/trades/**
+
+        - id: position-service
+          uri: http://localhost:8082
+          predicates:
+            - Path=/api/positions/**
+
+        - id: risk-service
+          uri: http://localhost:8083
+          predicates:
+            - Path=/api/risk/**
+
+
+
+jwt:
+  secret: mySuperSecretFallbackKeyThatIsLongEnoughToPreventErrors123456!
+
