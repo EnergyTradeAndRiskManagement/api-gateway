@@ -14,6 +14,18 @@ spring:
     gateway:
       default-filters:
         - AuthenticationFilter
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
       routes:
 
         - id: auth-service
@@ -24,17 +36,32 @@ spring:
         - id: trade-service
           uri: http://localhost:8081
           predicates:
-            - Path=/api/v1/trades/**
+            - Path=/api/v1/trades, /api/v1/trades/**, /api/v1/commodities, /api/v1/commodities/**
 
         - id: position-service
-          uri: http://localhost:8082
-          predicates:
-            - Path=/api/positions/**
-
-        - id: risk-service
           uri: http://localhost:8083
           predicates:
-            - Path=/api/risk/**
+            - Path=/api/positions, /api/positions/**
+
+        - id: risk-service
+          uri: http://localhost:8084
+          predicates:
+            - Path=/api/risk, /api/risk/**
+
+        - id: market-data-service
+          uri: http://localhost:8085
+          predicates:
+            - Path=/api/market-data, /api/market-data/**, /api/valuation, /api/valuation/**
+
+        - id: pnl-service
+          uri: http://localhost:8086
+          predicates:
+            - Path=/api/pnl, /api/pnl/**
+
+        - id: batch-service
+          uri: http://localhost:8087
+          predicates:
+            - Path=/api/batch, /api/batch/**
 
 jwt:
   secret: mySuperSecretFallbackKeyThatIsLongEnoughToPreventErrors123456!

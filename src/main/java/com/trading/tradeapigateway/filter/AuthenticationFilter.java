@@ -38,7 +38,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
 
             if (routeValidator.isSecured.test(request)) {
                 // Check if Authorization header is present
-                if (!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
+                if(!request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)) {
                     return onError(exchange, "Missing Authorization Header", HttpStatus.UNAUTHORIZED);
                 }
 
@@ -64,6 +64,10 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                     if (roles != null && !roles.isEmpty()) {
                         requestBuilder.header("X-Auth-Roles", String.join(",", roles));
                     }
+                    System.out.println("Path: " + request.getURI().getPath());
+                    System.out.println(
+                            "Is secured: " + routeValidator.isSecured.test(request)
+                    );
 
                     return chain.filter(exchange.mutate().request(requestBuilder.build()).build());
 
@@ -72,6 +76,7 @@ public class AuthenticationFilter extends AbstractGatewayFilterFactory<Authentic
                 } catch (JwtException | IllegalArgumentException e) {
                     return onError(exchange, "Invalid JWT token: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
                 }
+
             }
 
             return chain.filter(exchange);
